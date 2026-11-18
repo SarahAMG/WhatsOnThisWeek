@@ -28,9 +28,13 @@
  function register(s){if(id(s))registry.set(id(s),s)}
  function updateHearts(){document.querySelectorAll('[data-fav-id]').forEach(b=>{const on=isSaved({id:b.dataset.favId});b.textContent=on?'♥':'♡';b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',on?'Remove from favourites':'Add to favourites');b.title=on?'Remove from favourites':'Save show'})}
  document.addEventListener('click',e=>{const b=e.target.closest('[data-fav-id]');if(!b)return;e.preventDefault();e.stopPropagation();const s=registry.get(b.dataset.favId)||state[b.dataset.favId];if(s)save(s);updateHearts()});
- function withFavourites(url){return new URL(url,location.href).href}
+ // Carry favourites between separately hosted pages when navigating via their links.
+ function encode(){try{return btoa(unescape(encodeURIComponent(JSON.stringify(state))))}catch(e){return ''}}
+ function importHash(){const m=location.hash.match(/(?:^#|&)o2f=([^&]+)/);if(!m)return;try{const incoming=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));for(const [key,v] of Object.entries(incoming)){if(v&&v.id&&(!state[key]||Number(v.updated)>Number(state[key].updated)))state[key]=v}persist();history.replaceState(null,'',location.pathname+location.search+location.hash.replace(/(?:^#|&)o2f=[^&]*/,'').replace(/^&/,'#'))}catch(e){console.warn('Could not import favourites',e)}}
+ function withFavourites(url){try{const u=new URL(url,location.href);if(u.origin===location.origin)return u.href;const encoded=encode();if(encoded&&encoded.length<6000)u.hash='o2f='+encodeURIComponent(encoded);return u.href}catch(e){return url}}
+ document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const u=new URL(a.href,location.href);if(u.hostname.endsWith('.pages.dev')&&u.origin!==location.origin)a.href=withFavourites(a.href)},true);
  window.addEventListener('storage',e=>{if(e.key===KEY){state=read();updateHearts();window.dispatchEvent(new Event('o2-favourites-changed'))}});
-
+ importHash();
  window.O2Favourites={register,heart,save,active,isSaved,updateHearts,withFavourites,esc};
 })();
 </script><body>
@@ -86,7 +90,8 @@ loadShows();
 </script>
 <script>
 document.getElementById("backToBackstage").addEventListener("click",function(){
-  window.location.href = "/";
+  if (window.history.length > 1) window.history.back();
+  else window.location.href = "https://o2-show-register.pages.dev/";
 });
 </script>
 
