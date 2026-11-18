@@ -13,29 +13,32 @@
 .fav-heart{display:inline-flex;align-items:center;justify-content:center;flex:none;width:42px;height:42px;border-radius:50%;border:1px solid #dfe5f2;background:#fff;color:#0050ff;cursor:pointer;font-size:24px;line-height:1;box-shadow:0 2px 9px #00000012}.fav-heart[aria-pressed="true"]{color:#0050ff;background:#eaf0ff;border-color:#a9bfff}.fav-heart:focus-visible{outline:3px solid #0050ff;outline-offset:2px}.fav-inline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.fav-inline .date,.fav-inline .new{margin:0}.fav-row{display:flex;gap:10px;align-items:center;justify-content:space-between}.fav-row .fav-heart{width:34px;height:34px;font-size:19px}.favs-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.favs-card{border:1px solid #e6eaf2;border-radius:18px;overflow:hidden;background:white}.favs-img{width:100%;aspect-ratio:16/9;object-fit:cover;background:#e8efff}.favs-placeholder{aspect-ratio:16/9;background:linear-gradient(125deg,#0050ff,#00008c);display:grid;place-items:center;color:white;font-weight:900;font-size:22px}.favs-content{padding:15px}.favs-content h3{font-size:19px;margin:0 0 6px}.favs-content p{font-size:12px;color:#606879;margin:0 0 12px}.favs-ticket{display:block;background:#0050ff;color:white;border-radius:999px;padding:11px;text-align:center;text-decoration:none;font-size:12px;font-weight:900}.favs-empty{background:#f5f7ff;border:1px solid #e2e9fa;padding:20px;border-radius:18px;color:#535b70}.favs-empty p{margin:5px 0 0}.favs-note{font-size:12px;color:#677083;margin-top:10px}@media(max-width:650px){.favs-list{grid-template-columns:1fr}}
 </style></head><script id="favourites-core">
 (function(){
- const KEY='o2-favourite-shows-v1';
- const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&quot;'}[c]));
- function read(){try{const v=JSON.parse(localStorage.getItem(KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch(e){return {}}}
- let state=read();
- function persist(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){console.warn('Unable to store favourites',e)}window.dispatchEvent(new Event('o2-favourites-changed'))}
- function id(s){return String(s?.id??'').trim()}
- function record(s){return {id:id(s),artist:String(s.artist||''),city:String(s.city||''),venue:String(s.venue||s.venues?.name||''),date:String(s.event_date||s.date||'').slice(0,10),ticket_url:String(s.ticket_url||''),image_url:String(s.image_url||''),updated:Date.now()}}
- function save(s){const x=record(s);if(!x.id)return false;if(state[x.id]&&!state[x.id].deleted){state[x.id]={...state[x.id],deleted:true,updated:Date.now()}}else state[x.id]={...state[x.id],...x,deleted:false};persist();return !state[x.id].deleted}
- function active(){return Object.values(state).filter(x=>x&&!x.deleted&&x.id).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'))}
- function isSaved(s){return Boolean(state[id(s)]&&!state[id(s)].deleted)}
- function heart(s){const on=isSaved(s);return `<button class="fav-heart" type="button" data-fav-id="${esc(id(s))}" aria-label="${on?'Remove from':'Add to'} favourites" aria-pressed="${on}" title="${on?'Remove from favourites':'Save show'}">${on?'♥':'♡'}</button>`}
- const registry=new Map();
- function register(s){if(id(s))registry.set(id(s),s)}
- function updateHearts(){document.querySelectorAll('[data-fav-id]').forEach(b=>{const on=isSaved({id:b.dataset.favId});b.textContent=on?'♥':'♡';b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',on?'Remove from favourites':'Add to favourites');b.title=on?'Remove from favourites':'Save show'})}
- document.addEventListener('click',e=>{const b=e.target.closest('[data-fav-id]');if(!b)return;e.preventDefault();e.stopPropagation();const s=registry.get(b.dataset.favId)||state[b.dataset.favId];if(s)save(s);updateHearts()});
- // Carry favourites between separately hosted pages when navigating via their links.
- function encode(){try{return btoa(unescape(encodeURIComponent(JSON.stringify(state))))}catch(e){return ''}}
- function importHash(){const m=location.hash.match(/(?:^#|&)o2f=([^&]+)/);if(!m)return;try{const incoming=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));for(const [key,v] of Object.entries(incoming)){if(v&&v.id&&(!state[key]||Number(v.updated)>Number(state[key].updated)))state[key]=v}persist();history.replaceState(null,'',location.pathname+location.search+location.hash.replace(/(?:^#|&)o2f=[^&]*/,'').replace(/^&/,'#'))}catch(e){console.warn('Could not import favourites',e)}}
- function withFavourites(url){try{const u=new URL(url,location.href);if(u.origin===location.origin)return u.href;const encoded=encode();if(encoded&&encoded.length<6000)u.hash='o2f='+encodeURIComponent(encoded);return u.href}catch(e){return url}}
- document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const u=new URL(a.href,location.href);if(u.hostname.endsWith('.pages.dev')&&u.origin!==location.origin)a.href=withFavourites(a.href)},true);
- window.addEventListener('storage',e=>{if(e.key===KEY){state=read();updateHearts();window.dispatchEvent(new Event('o2-favourites-changed'))}});
- importHash();
- window.O2Favourites={register,heart,save,active,isSaved,updateHearts,withFavourites,esc};
+'use strict';
+const KEY='o2-favourite-shows-v1', HUB='https://backstage-5k0.pages.dev/', isHub=location.origin===new URL(HUB).origin;
+const allowed=new Set(['https://backstage-5k0.pages.dev','https://whatsonthisweek.pages.dev','https://just-announced.pages.dev']);
+// The quiz's actual origin is determined by the link in the Backstage configuration; never trust arbitrary return URLs.
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function read(){try{const v=JSON.parse(localStorage.getItem(KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch(e){return {}}}
+let state=read();const registry=new Map();
+const id=s=>String(s?.id??'').trim();
+const record=s=>({id:id(s),artist:String(s.artist||''),city:String(s.city||''),venue:String(s.venue||s.venues?.name||''),date:String(s.event_date||s.date||'').slice(0,10),ticket_url:String(s.ticket_url||''),image_url:String(s.image_url||'')});
+const pack=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unpack=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)))));
+function persist(){localStorage.setItem(KEY,JSON.stringify(state));changed()}
+function changed(){updateHearts();window.dispatchEvent(new Event('o2-favourites-changed'))}
+function active(){return Object.values(state).filter(x=>x&&!x.deleted&&x.id).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'))}
+function isSaved(s){return !!(state[id(s)]&&!state[id(s)].deleted)}
+function heart(s){const on=isSaved(s);return `<button class="fav-heart" type="button" data-fav-id="${esc(id(s))}" aria-label="${on?'Remove from':'Add to'} favourites" aria-pressed="${on}" title="${on?'Remove from favourites':'Save show'}">${on?'♥':'♡'}</button>`}
+function register(s){if(id(s))registry.set(id(s),s)}
+function updateHearts(){document.querySelectorAll('[data-fav-id]').forEach(b=>{const on=isSaved({id:b.dataset.favId});b.textContent=on?'♥':'♡';b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label',on?'Remove from favourites':'Add to favourites')})}
+function localSave(s){const x=record(s);if(!x.id)return false;state[x.id]={...(state[x.id]||{}),...x,deleted:isSaved(x),updated:Date.now()};persist();return !state[x.id].deleted}
+function save(s){if(!isHub){const x=record(s);if(!x.id)return false;const ret=location.href.split('#')[0];sessionStorage.setItem('o2-fav-pending',x.id);location.assign(HUB+'#favsync='+pack({op:'toggle',show:x,ret}));return false}return localSave(s)}
+function validReturn(s){try{const u=new URL(s);return u.protocol==='https:'&&(allowed.has(u.origin)||u.hostname.endsWith('.pages.dev')&&u.hostname!==new URL(HUB).hostname)&&u.username===''&&u.password===''}catch(e){return false}}
+function receive(){const m=location.hash.match(/^#favsync=([A-Za-z0-9_-]+)$/);if(!m)return;try{const x=unpack(m[1]);if(isHub&&x.op==='toggle'&&x.show&&validReturn(x.ret)){localSave(x.show);const payload=pack({op:'state',items:state});const dest=new URL(x.ret);dest.hash='favsync='+payload;location.replace(dest.href);return}if(!isHub&&x.op==='state'&&x.items&&typeof x.items==='object'){state=x.items;persist();sessionStorage.removeItem('o2-fav-pending');history.replaceState(null,'',location.pathname+location.search)}}catch(e){console.warn('Favourite transfer could not be completed',e);if(isHub)history.replaceState(null,'',location.pathname+location.search)}}
+receive();
+document.addEventListener('click',e=>{const b=e.target.closest('[data-fav-id]');if(!b)return;e.preventDefault();e.stopPropagation();const s=registry.get(b.dataset.favId)||state[b.dataset.favId];if(s)save(s)},true);
+window.addEventListener('storage',e=>{if(e.key===KEY){state=read();changed()}});
+window.O2Favourites={register,heart,save,active,isSaved,updateHearts,withFavourites:url=>url,esc};
 })();
 </script><body>
 <button type="button" class="backstageBack" id="backToBackstage" aria-label="Back to Backstage">← BACK TO BACKSTAGE</button>
